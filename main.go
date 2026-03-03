@@ -31,7 +31,7 @@ func main() {
 	http.HandleFunc("/profile", AuthMiddleware(ProfileHandler))
 	http.HandleFunc("/health", HealthHandler)
 
-	// Запуск сервера
+	// Запуск сервераё
 	port := getEnv("SERVER_PORT", "8080")
 	log.Printf("🚀 Server starting on port %s", port)
 	log.Printf("📝 Register: POST http://localhost:%s/register", port)

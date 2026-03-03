@@ -41,3 +41,9 @@ type Claims struct {
 	Username string `json:"username"`
 	jwt.RegisteredClaims
 }
+
+// TokenResponse структура ответа на запрос регистрации и авторизации
+type TokenResponse struct {
+	Token string `json:"token"`
+	User  User   `json:"user"`
+}

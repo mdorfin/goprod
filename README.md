@@ -143,7 +143,7 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 go run *.go
 
 # В другом терминале тестируйте API
-curl -X POST http://localhost:8080/register \
+curl -i -X POST http://localhost:8080/register \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","username":"testuser","password":"SecurePass123"}'
 ```
@@ -157,7 +157,7 @@ curl http://localhost:8080/health
 
 ### 2. Регистрация пользователя
 ```bash
-curl -X POST http://localhost:8080/register \
+curl -i -X POST http://localhost:8080/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -168,7 +168,7 @@ curl -X POST http://localhost:8080/register \
 
 ### 3. Вход в систему
 ```bash
-curl -X POST http://localhost:8080/login \
+curl -i -X POST http://localhost:8080/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",

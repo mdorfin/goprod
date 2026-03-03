@@ -1,86 +1,102 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"os"
-	// TODO: Добавьте необходимые импорты:
-	// "time"
-	// "github.com/golang-jwt/jwt/v5"
-	// "golang.org/x/crypto/bcrypt"
+	"regexp"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
-var jwtSecret []byte
+const minJWTSecretLength = 32
+
+var (
+	jwtSecret     []byte
+	emailRegex    = regexp.MustCompile("^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$")
+	usernameRegex = regexp.MustCompile("^[a-zA-Z0-9_]{4,20}$")
+	passwordRegex = regexp.MustCompile("^[a-zA-Z0-9_!@#$%^&*~]{8,}$")
+)
 
 // InitAuth инициализирует секретный ключ для JWT
 func InitAuth() {
 	jwtSecret = []byte(os.Getenv("JWT_SECRET"))
-	if len(jwtSecret) < 32 {
-		panic("JWT_SECRET must be at least 32 characters long")
+	if len(jwtSecret) < minJWTSecretLength {
+		panic(fmt.Sprintf("JWT_SECRET must be at least %d characters long", minJWTSecretLength))
 	}
+
+	log.Println(string(jwtSecret))
 }
 
 // HashPassword хеширует пароль с использованием bcrypt
 func HashPassword(password string) (string, error) {
-	// TODO: Реализуйте хеширование пароля
-	//
-	// Что нужно сделать:
-	// 1. Импортируйте "golang.org/x/crypto/bcrypt"
-	// 2. Используйте bcrypt.GenerateFromPassword()
-	// 3. Передайте []byte(password) и bcrypt.DefaultCost
-	// 4. Обработайте ошибку и верните результат как string
-	//
-	// Документация: https://pkg.go.dev/golang.org/x/crypto/bcrypt#GenerateFromPassword
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
 
-	return "", fmt.Errorf("not implemented - реализуйте хеширование пароля с bcrypt")
+	return string(hashedPassword), nil
 }
 
 // CheckPassword проверяет пароль против хеша
 func CheckPassword(password, hash string) bool {
-	// TODO: Реализуйте проверку пароля
-	//
-	// Что нужно сделать:
-	// 1. Используйте bcrypt.CompareHashAndPassword()
-	// 2. Передайте []byte(hash) и []byte(password)
-	// 3. Верните true если ошибки нет, false если есть
-	//
-	// Документация: https://pkg.go.dev/golang.org/x/crypto/bcrypt#CompareHashAndPassword
+	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
+		return false
+	}
 
-	return false // Временная заглушка
+	return true
 }
 
 // GenerateToken создает JWT токен для пользователя
 func GenerateToken(user User) (string, error) {
-	// TODO: Реализуйте генерацию JWT токена
-	//
-	// Что нужно сделать:
-	// 1. Импортируйте "time" и "github.com/golang-jwt/jwt/v5"
-	// 2. Создайте Claims структуру с данными пользователя
-	//    - Заполните UserID, Email, Username
-	//    - Установите ExpiresAt на 24 часа вперед: jwt.NewNumericDate(time.Now().Add(24 * time.Hour))
-	//    - Установите IssuedAt на текущее время: jwt.NewNumericDate(time.Now())
-	// 3. Создайте токен с помощью jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	// 4. Подпишите токен с помощью token.SignedString(jwtSecret)
-	//
-	// Документация: https://pkg.go.dev/github.com/golang-jwt/jwt/v5
+	claims := Claims{
+		UserID:   user.ID,
+		Email:    user.Email,
+		Username: user.Username,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
 
-	return "", fmt.Errorf("not implemented - реализуйте генерацию JWT токена")
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	compledToken, err := token.SignedString(jwtSecret)
+	if err != nil {
+		return "", err
+	}
+
+	return compledToken, nil
 }
 
 // ValidateToken проверяет и парсит JWT токен
 func ValidateToken(tokenString string) (*Claims, error) {
-	// TODO: Реализуйте валидацию JWT токена
-	//
-	// Что нужно сделать:
-	// 1. Создайте пустую структуру claims := &Claims{}
-	// 2. Используйте jwt.ParseWithClaims() для парсинга токена
-	// 3. В keyFunc проверьте, что алгоритм подписи HMAC (*jwt.SigningMethodHMAC)
-	// 4. Верните jwtSecret как ключ для проверки подписи
-	// 5. Проверьте, что токен валиден (token.Valid)
-	// 6. Верните claims и ошибку
-	//
-	// Подсказка: keyFunc - это функция func(token *jwt.Token) (interface{}, error)
+	claims := Claims{}
 
-	return nil, fmt.Errorf("not implemented - реализуйте валидацию JWT токена")
+	token, err := jwt.ParseWithClaims(tokenString, &claims, func(token *jwt.Token) (interface{}, error) {
+		// Ensure the algorithm used in the token is what you expect (e.g., HMAC)
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Method.Alg())
+		}
+
+		// Return the secret key
+		return jwtSecret, nil
+	})
+
+	if err != nil {
+		if errors.Is(err, jwt.ErrSignatureInvalid) {
+			return nil, errors.New("invalid token signature")
+		}
+		return nil, err // This will cover expiration and other validation errors
+	}
+
+	if !token.Valid {
+		return nil, errors.New("token is invalid")
+	}
+
+	return &claims, nil
 }
 
 // ValidatePassword проверяет требования к паролю
@@ -89,11 +105,9 @@ func ValidatePassword(password string) error {
 		return fmt.Errorf("password must be at least 8 characters long")
 	}
 
-	// TODO: Добавьте дополнительные проверки если необходимо
-	// Идеи для улучшения:
-	// - проверка наличия цифр
-	// - проверка наличия заглавных букв
-	// - проверка наличие специальных символов
+	if !passwordRegex.MatchString(password) {
+		return fmt.Errorf("invalid password format")
+	}
 
 	return nil
 }
@@ -104,8 +118,22 @@ func ValidateEmail(email string) error {
 		return fmt.Errorf("email is required")
 	}
 
-	// TODO: Добавьте более строгую валидацию email если необходимо
-	// Можно использовать regexp.MatchString() для проверки формата
+	if !emailRegex.MatchString(email) {
+		return fmt.Errorf("invalid email format")
+	}
+
+	return nil
+}
+
+// ValidateUsername проверяет формат username (базовая проверка)
+func ValidateUsername(username string) error {
+	if username == "" {
+		return fmt.Errorf("username is required")
+	}
+
+	if !usernameRegex.MatchString(username) {
+		return fmt.Errorf("invalid username format")
+	}
 
 	return nil
 }
